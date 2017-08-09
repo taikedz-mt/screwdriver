@@ -11,12 +11,16 @@ axisnotes[6] = "y is down"
 -- An inutitive progression moving thus:
 -- x up, x down, y up, y down, z up, z down
 local axischain = {}
-axischain=[1] = 6
-axischain=[2] = 3
-axischain=[3] = 4
-axischain=[4] = 5
-axischain=[5] = 1
-axischain=[6] = 2
+axischain[1] = 6
+axischain[2] = 3
+axischain[3] = 4
+axischain[4] = 5
+axischain[5] = 1
+axischain[6] = 2
+
+local function get_next_axis(rawaxis)
+	return axischain[rawaxis+1] - 1
+end
 
 -- Player preferences
 
@@ -51,27 +55,28 @@ local function get_pref(playername, prefname)
 	return player_prefs[playername][prefname]
 end
 
-local function send_help(playername)
-	minetest.chat_send_player(playername, "Screwdriver: Left-click to choose an upward axis, then right-click to swivel. To turn on orientation help whilst you use the screwdriver, use '/screwdriver messages on'")
-	minetest.chat_send_player(playername, "Sprit level: Left-click to reset the orientation of the node, right-click to print orientation information. Messages must be active.")
-	minetest.chat_send_player(playername, "Turn messages off with '/screwdriver messages off'")
-end
-
 -- Helper functions
 
+local function db(message)
+	minetest.debug(dump(message) )
+end
+
 local function is_facedir_node(pointed_thing)
+	local node = minetest.get_node(pointed_thing.under)
+
 	if not pointed_thing or pointed_thing.type ~= "node" then
 		return false
 	end
 
-	local node = minetest.get_node(pointed_thing.under)
+	local node_def = minetest.registered_nodes[node.name]
 
-	return node.paramtype == "facedir"
+	db(node_def.paramtype2)
+	return node_def.paramtype2 == "facedir"
 end
 
-local function can_operate(pointed_thing, player)
-	if not pointed_thing or pointed_thing.type ~= "node" or is_facedir_node(pointed_thing.under) then
-		return false
+local function cant_operate(pointed_thing, player)
+	if not pointed_thing or pointed_thing.type ~= "node" or not is_facedir_node(pointed_thing) then
+		return true
 	end
 
 	local playername = player:get_player_name()
@@ -97,8 +102,8 @@ local function param2_set(pos, rotation, upperbits)
 end
 
 local function ar_from_facedir(facedir)
-	local rot = value % 4
-	local axi = (value - rot ) / 4
+	local rot = facedir % 4
+	local axi = ( (facedir - rot ) / 4 ) % 6
 
 	return axi,rot
 end
@@ -107,19 +112,76 @@ local function facedir_from_ar(axis_d, relative_r)
 	return axis_d * 4 + relative_r
 end
 
-local function axis_message(player, axis, rotation)
+-- Player feedback
+
+player_huds = {}
+
+local function remove_hud(player, id)
+	db("Removing hud "..tostring(id).." for "..player:get_player_name() )
 	local playername = player:get_player_name()
 
-	if not get_prefs(playername, "messages") then return end
+	if not player_huds[playername] then return end
 
-	minetest.chat_send_player(playername, axisnotes[axis+1]..", rotation is "..tostring(rotation))
+	local savedid = player_huds[playername].hid
+
+	-- check hud not yet removed
+	if not id then -- remove current
+		if savedid == nil then return end -- nothing to remove
+
+		db("Removing current HUD")
+
+	elseif savedid ~= id then -- tried to remove obsolete, or non-existent
+		db("HUD "..tostring(id).." no longer relevant.")
+		return
+	end
+	-- here, savedid must be non-nil
+
+	db("Removing "..tostring(savedid) )
+
+	-- remove it
+	player:hud_remove(savedid)
+	player_huds[playername].hid = nil
+end
+
+local function set_hud(player, message)
+	-- remove pre-existing hud
+	remove_hud(player)
+
+	-- write new hud
+	local hid = player:hud_add({
+		hud_elem_type = "text",
+		direction = 0,
+		name = "orientation",
+		text = message,
+		position = {x=0.05, y=0.85},
+		scale = {x=200, y=50},
+		number = 0xFFFFFF,
+		alignment = {x=1, y=-1},
+
+	})
+
+	db("Setting hud "..tostring(hid) )
+
+	-- save hud id
+	player_huds[player:get_player_name()] = { hid=hid, time=os.time() }
+
+	-- set timeout to remove hud
+	minetest.after(1, function()
+		remove_hud(player, hid)
+	end)
+end
+
+local function rot_message(player, axis, rotation)
+	local playername = player:get_player_name()
+
+	set_hud(player, axisnotes[axis+1]..", rotation is "..tostring(rotation))
 end
 
 -- Main handlers
 
 local function sd_swivel(itemstack, user, pointed_thing)
 
-	if not can_operate(pointed_thing) then return end
+	if cant_operate(pointed_thing, user) then return end
 
 	local pos = pointed_thing.under
 	local facedir, extra = param2_parts(pos)
@@ -134,13 +196,13 @@ end
 
 local function sd_flip(itemstack, user, pointed_thing)
 
-	if not can_operate(pointed_thing) then return end
+	if cant_operate(pointed_thing, user) then return end
 
 	local pos = pointed_thing.under
 	local facedir, extra = param2_parts(pos)
 	local axis, rotation = ar_from_facedir(facedir)
 
-	axis = axischain[axis+1]
+	axis = get_next_axis(axis)
 
 	rot_message(user, axis, rotation)
 
@@ -149,7 +211,7 @@ end
 
 local function sd_reset(itemstack, user, pointed_thing)
 
-	if not can_operate(pointed_thing) then return end
+	if cant_operate(pointed_thing, user) then return end
 
 	local pos = pointed_thing.under
 	local facedir, extra = param2_parts(pos)
@@ -161,6 +223,7 @@ local function sd_reset(itemstack, user, pointed_thing)
 end
 
 local function sd_report(itemstack, user, pointed_thing)
+	if not is_facedir_node(pointed_thing) then return end
 
 	local pos = pointed_thing.under
 	local facedir, extra = param2_parts(pos)
@@ -172,7 +235,7 @@ end
 
 -- Tools
 
-minetest.register_tool("screwdriver_plus:screwdriver", {
+minetest.register_tool("screwdriver:screwdriver", {
 	description = "Screwdriver+ (try '/screwdriver help')",
 	inventory_image = "screwdriver_plus_screwdriver.png",
 
@@ -187,9 +250,9 @@ minetest.register_tool("screwdriver_plus:screwdriver", {
 	end,
 })
 
-minetest.register_tool("screwdriver_plus:spirit_level", {
+minetest.register_tool("screwdriver:spirit_level", {
 	description = "Spirit Level (left-click: reset, right-click: print orientation)",
-	inventory_image = "screwdriver_plus_spirit_level.png",
+	inventory_image = "screwdriver_plus_spiritlevel.png",
 
 	on_use = function(itemstack, user, pointed_thing)
 		sd_reset(itemstack, user, pointed_thing)
@@ -202,58 +265,19 @@ minetest.register_tool("screwdriver_plus:spirit_level", {
 	end,
 })
 
-minetest.register_craftitem("screwdriver_plus:steel_cubelet", {
-	description = "Steel cubelet",
-	wieldimage = "screwdriver_plus_steel_cubelet.png",
-})
-
--- Commands
-
-minetest.register_chatcommand("screwdriver", {
-	description = "Configure screwdriver feedback settings",
-	params = "messages { on | off }",
-	func = function(playername, params)
-		if params == "messages on" then
-			set_prefs(playername, {messages = true})
-
-		elseif params == "message off" then
-			set_prefs(playername, {messages = false})
-
-		elseif params == "help" then
-			send_help(playername)
-
-		else
-			minetest.chat_send_player("Invalid setting")
-		end
-	end,
-})
-
 -- Recipes
-local sp = "screwdriver_plus:steel_cubelet"
 
 minetest.register_craft({
-	output = "screwdriver_plus:screwdriver",
+	output = "screwdriver:screwdriver",
 	recipe = {
-		{sp, "group:stick"}
+		{"default:steel_ingot", "group:stick"}
 	}
 })
 
 minetest.register_craft({
-	output = "screwdriver_plus:spirit_level",
+	output = "screwdriver:spirit_level",
 	recipe = {
-		{sp, "default:glass", sp},
+		{"default:steel_ingot", "default:glass", "default:steel_ingot"},
 	}
 })
 
-minetest.register_craft({
-	output = "screwdriver_plus:steel_cubelet 3",
-	type = "shapeless",
-	recipe = {"default:steel_ingot"},
-})
-
--- You shattered your steel and recombined it. You really expect a solid ingot? :-P
-minetest.register_craft({
-	output = "default:iron_lump",
-	type = "shapeless",
-	recipe = {sp, sp, sp},
-})
