@@ -19,13 +19,11 @@ axischain[5] = 1
 axischain[6] = 2
 
 local screw_materials = {}
-screw_materials["screwdriver:screwdriver_steel"]   = { wear_rate = 50,   material = "default:steel_ingot", material_name = "steel" }
-screw_materials["screwdriver:screwdriver_bronze"]  = { wear_rate = 80,   material = "default:bronze_ingot", material_name = "bronze" }
-screw_materials["screwdriver:screwdriver_gold"]    = { wear_rate = 160,  material = "default:gold_ingot", material_name = "gold" }
-screw_materials["screwdriver:screwdriver_diamond"] = { wear_rate = 400,  material = "default:diamond", material_name = "diamond" }
-screw_materials["screwdriver:screwdriver_mese"]    = { wear_rate = 1000, material = "default:mese_crystal", material_name = "mese" }
-
-minetest.register_alias("screwdriver:screwdriver_steel", "screwdriver:screwdriver")
+screw_materials["screwdriver:screwdriver_steel"]   = { wear_rate = 50,   material = "default:steel_ingot", material_name = "steel", color = "white:0" }
+screw_materials["screwdriver:screwdriver_bronze"]  = { wear_rate = 80,   material = "default:bronze_ingot", material_name = "bronze" , color = "orange:90" }
+screw_materials["screwdriver:screwdriver_gold"]    = { wear_rate = 160,  material = "default:gold_ingot", material_name = "gold" , color = "yellow:60" }
+screw_materials["screwdriver:screwdriver_diamond"] = { wear_rate = 400,  material = "default:diamond", material_name = "diamond" , color = "blue:90" }
+screw_materials["screwdriver:screwdriver_mese"]    = { wear_rate = 1000, material = "default:mese_crystal", material_name = "mese" , color = "yellow:100" }
 
 local function get_next_axis(rawaxis)
 	return axischain[rawaxis+1] - 1
@@ -187,7 +185,7 @@ local function rot_message(player, axis, rotation)
 end
 
 local function add_wear(itemstack)
-	local maxu = screw_materials[itemstack.name].wear_rate
+	local maxu = screw_materials[itemstack:get_name()].wear_rate
 
 	itemstack:add_wear(math.ceil(65536 / maxu))
 end
@@ -257,15 +255,19 @@ end
 
 -- Tools
 
-local function register_screwtools(material, material_name)
+local function capitalize(mystr)
+	return mystr -- TODO make firsst letter upper case
+end
+
+local function register_screwtools(material, material_name, color)
 
 	minetest.register_tool("screwdriver:screwdriver_"..material_name, {
-		description = material_name.." Screwdriver+ (try '/screwdriver help')",
-		inventory_image = "screwdriver_plus_screwdriver_"..material_name..".png",
+		description = capitalize(material_name).." Screwdriver+ (try '/screwdriver help')",
+		inventory_image = "screwdriver_plus_tip.png^[colorize:"..color.."^screwdriver_plus_screwdriver.png",
 
 		on_use = function(itemstack, user, pointed_thing)
 			itemstack = sd_flip(itemstack, user, pointed_thing)
-			itemstack = return itemstack
+			return itemstack
 		end,
 
 		on_place = function(itemstack, user, pointed_thing)
@@ -274,9 +276,9 @@ local function register_screwtools(material, material_name)
 		end,
 	})
 
-	minetest.register_tool("screwdriver:spirit_level_"..material_name, {
-		description = "Spirit Level (left-click: reset, right-click: print orientation)",
-		inventory_image = "screwdriver_plus_spiritlevel_"..material_name".png",
+	minetest.register_tool("screwdriver:spiritlevel_"..material_name, {
+		description = capitalize(material_name).." Spirit Level (left-click: reset, right-click: print orientation)",
+		inventory_image = "screwdriver_plus_spiritlevel_"..material_name..".png",
 
 		on_use = function(itemstack, user, pointed_thing)
 			itemstack = sd_reset(itemstack, user, pointed_thing)
@@ -307,3 +309,8 @@ local function register_screwtools(material, material_name)
 
 end
 
+for _,matdef in pairs(screw_materials) do
+	register_screwtools(matdef.material, matdef.material_name, matdef.color)
+end
+
+minetest.register_alias("screwdriver:screwdriver_steel", "screwdriver:screwdriver")
