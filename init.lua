@@ -18,6 +18,15 @@ axischain[4] = 5
 axischain[5] = 1
 axischain[6] = 2
 
+local screw_materials = {}
+screw_materials["screwdriver:screwdriver_steel"]   = { wear_rate = 50,   material = "default:steel_ingot", material_name = "steel" }
+screw_materials["screwdriver:screwdriver_bronze"]  = { wear_rate = 80,   material = "default:bronze_ingot", material_name = "bronze" }
+screw_materials["screwdriver:screwdriver_gold"]    = { wear_rate = 160,  material = "default:gold_ingot", material_name = "gold" }
+screw_materials["screwdriver:screwdriver_diamond"] = { wear_rate = 400,  material = "default:diamond", material_name = "diamond" }
+screw_materials["screwdriver:screwdriver_mese"]    = { wear_rate = 1000, material = "default:mese_crystal", material_name = "mese" }
+
+minetest.register_alias("screwdriver:screwdriver_steel", "screwdriver:screwdriver")
+
 local function get_next_axis(rawaxis)
 	return axischain[rawaxis+1] - 1
 end
@@ -174,7 +183,13 @@ end
 local function rot_message(player, axis, rotation)
 	local playername = player:get_player_name()
 
-	set_hud(player, axisnotes[axis+1]..", rotation is "..tostring(rotation))
+	set_hud(player, axisnotes[axis+1]..", Y-rotation is "..tostring(rotation))
+end
+
+local function add_wear(itemstack)
+	local maxu = screw_materials[itemstack.name].wear_rate
+
+	itemstack:add_wear(math.ceil(65536 / maxu))
 end
 
 -- Main handlers
@@ -192,6 +207,8 @@ local function sd_swivel(itemstack, user, pointed_thing)
 	rot_message(user, axis, rotation)
 
 	param2_set(pos, facedir_from_ar(axis, rotation), extra)
+
+	return add_wear(itemstack)
 end
 
 local function sd_flip(itemstack, user, pointed_thing)
@@ -207,6 +224,8 @@ local function sd_flip(itemstack, user, pointed_thing)
 	rot_message(user, axis, rotation)
 
 	param2_set(pos, facedir_from_ar(axis, rotation), extra)
+
+	return add_wear(itemstack)
 end
 
 local function sd_reset(itemstack, user, pointed_thing)
@@ -220,6 +239,8 @@ local function sd_reset(itemstack, user, pointed_thing)
 
 	param2_set(pos, facedir_from_ar(0, 0), extra)
 
+	return add_wear(itemstack)
+
 end
 
 local function sd_report(itemstack, user, pointed_thing)
@@ -231,53 +252,58 @@ local function sd_report(itemstack, user, pointed_thing)
 
 	rot_message(user, axis, rotation)
 
+	return add_wear(itemstack)
 end
 
 -- Tools
 
-minetest.register_tool("screwdriver:screwdriver", {
-	description = "Screwdriver+ (try '/screwdriver help')",
-	inventory_image = "screwdriver_plus_screwdriver.png",
+local function register_screwtools(material, material_name)
 
-	on_use = function(itemstack, user, pointed_thing)
-		sd_flip(itemstack, user, pointed_thing)
-		return itemstack
-	end,
+	minetest.register_tool("screwdriver:screwdriver_"..material_name, {
+		description = material_name.." Screwdriver+ (try '/screwdriver help')",
+		inventory_image = "screwdriver_plus_screwdriver_"..material_name..".png",
 
-	on_place = function(itemstack, user, pointed_thing)
-		sd_swivel(itemstack, user, pointed_thing)
-		return itemstack
-	end,
-})
+		on_use = function(itemstack, user, pointed_thing)
+			itemstack = sd_flip(itemstack, user, pointed_thing)
+			itemstack = return itemstack
+		end,
 
-minetest.register_tool("screwdriver:spirit_level", {
-	description = "Spirit Level (left-click: reset, right-click: print orientation)",
-	inventory_image = "screwdriver_plus_spiritlevel.png",
+		on_place = function(itemstack, user, pointed_thing)
+			sd_swivel(itemstack, user, pointed_thing)
+			return itemstack
+		end,
+	})
 
-	on_use = function(itemstack, user, pointed_thing)
-		sd_reset(itemstack, user, pointed_thing)
-		return itemstack
-	end,
+	minetest.register_tool("screwdriver:spirit_level_"..material_name, {
+		description = "Spirit Level (left-click: reset, right-click: print orientation)",
+		inventory_image = "screwdriver_plus_spiritlevel_"..material_name".png",
 
-	on_place = function(itemstack, user, pointed_thing)
-		sd_report(itemstack, user, pointed_thing)
-		return itemstack
-	end,
-})
+		on_use = function(itemstack, user, pointed_thing)
+			itemstack = sd_reset(itemstack, user, pointed_thing)
+			return itemstack
+		end,
 
--- Recipes
+		on_place = function(itemstack, user, pointed_thing)
+			itemstack = sd_report(itemstack, user, pointed_thing)
+			return itemstack
+		end,
+	})
 
-minetest.register_craft({
-	output = "screwdriver:screwdriver",
-	recipe = {
-		{"default:steel_ingot", "group:stick"}
-	}
-})
+	-- Recipes
 
-minetest.register_craft({
-	output = "screwdriver:spirit_level",
-	recipe = {
-		{"default:steel_ingot", "default:glass", "default:steel_ingot"},
-	}
-})
+	minetest.register_craft({
+		output = "screwdriver:screwdriver_"..material_name,
+		recipe = {
+			{material, "group:stick"}
+		}
+	})
+
+	minetest.register_craft({
+		output = "screwdriver:spirit_level_"..material_name,
+		recipe = {
+			{material, "default:glass", material},
+		}
+	})
+
+end
 
