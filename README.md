@@ -6,6 +6,8 @@ By default, screwdrivers and spirit levels can be made with steel, bronze, gold,
 
 You can opt so simply have just the steel screwdriver by setting the option `screwdriver.steel_only = true` in `minetest.conf`
 
+![](images/example.png)
+
 ## Flip and swivel
 
 To use the screwdriver, left-click to set the axis direction, then swivel the node around its Y-axis.
@@ -17,3 +19,5 @@ The ScrewDrvier displays orientation information on-screen upon rotating.flippin
 ## Spirit Level
 
 The sprit level allows you to either reset the orientation of the node to zero using a left-click, or print the information for the node using a right-click.
+
+![](images/tools.png)
