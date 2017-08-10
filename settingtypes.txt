@@ -1,0 +1,2 @@
+# Set to true if you want only steel screwdrivers
+screwdriver.steel_only (Only steel scredrivers) bool false

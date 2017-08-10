@@ -1,3 +1,4 @@
+-- Axis facilitation tables
 
 -- 0 = y+    1 = z+    2 = z-    3 = x+    4 = x-    5 = y-
 local axisnotes = {}
@@ -18,16 +19,48 @@ axischain[4] = 5
 axischain[5] = 1
 axischain[6] = 2
 
-local screw_materials = {}
-screw_materials["screwdriver:screwdriver_steel"]   = { wear_rate = 50,   material = "default:steel_ingot", material_name = "steel", color = "white:0" }
-screw_materials["screwdriver:screwdriver_bronze"]  = { wear_rate = 80,   material = "default:bronze_ingot", material_name = "bronze" , color = "orange:90" }
-screw_materials["screwdriver:screwdriver_gold"]    = { wear_rate = 160,  material = "default:gold_ingot", material_name = "gold" , color = "yellow:60" }
-screw_materials["screwdriver:screwdriver_diamond"] = { wear_rate = 400,  material = "default:diamond", material_name = "diamond" , color = "blue:90" }
-screw_materials["screwdriver:screwdriver_mese"]    = { wear_rate = 1000, material = "default:mese_crystal", material_name = "mese" , color = "yellow:100" }
-
 local function get_next_axis(rawaxis)
 	return axischain[rawaxis+1] - 1
 end
+
+-- Materials for tools
+
+local screw_materials = {}
+
+screw_materials["screwdriver:screwdriver_steel"] = {
+	wear_rate = 100,
+	material = "default:steel_ingot",
+	material_name = "steel",
+	color = "white:20",
+	}
+
+screw_materials["screwdriver:screwdriver_bronze"] = {
+	wear_rate = 160,
+	material = "default:bronze_ingot",
+	material_name = "bronze" ,
+	color = "orange:120",
+	}
+
+screw_materials["screwdriver:screwdriver_gold"] = {
+	wear_rate = 300,
+	material = "default:gold_ingot",
+	material_name = "gold" ,
+	color = "yellow:90",
+	}
+
+screw_materials["screwdriver:screwdriver_diamond"] = {
+	wear_rate = 1000,
+	material = "default:diamond",
+	material_name = "diamond" ,
+	color = "aqua:100",
+	}
+
+screw_materials["screwdriver:screwdriver_mese"] = {
+	wear_rate = 2000,
+	material = "default:mese_crystal",
+	material_name = "mese",
+	color = "yellow:150",
+	}
 
 -- Player preferences
 
@@ -65,7 +98,7 @@ end
 -- Helper functions
 
 local function db(message)
-	minetest.debug(dump(message) )
+	-- minetest.debug(dump(message) )
 end
 
 local function is_facedir_node(pointed_thing)
@@ -76,6 +109,7 @@ local function is_facedir_node(pointed_thing)
 	end
 
 	local node_def = minetest.registered_nodes[node.name]
+	if not node_def then return end -- undefined block
 
 	db(node_def.paramtype2)
 	return node_def.paramtype2 == "facedir"
@@ -123,38 +157,33 @@ end
 
 player_huds = {}
 
-local function remove_hud(player, id)
-	db("Removing hud "..tostring(id).." for "..player:get_player_name() )
+hud_duration_time = 2
+
+local function remove_hud(player, hid)
+	db("Attempting removal ...")
 	local playername = player:get_player_name()
 
-	if not player_huds[playername] then return end
+	local huddef = player_huds[playername]
+	if not huddef then return end
 
-	local savedid = player_huds[playername].hid
+	-- if time now - time remaining < N, return
 
-	-- check hud not yet removed
-	if not id then -- remove current
-		if savedid == nil then return end -- nothing to remove
-
-		db("Removing current HUD")
-
-	elseif savedid ~= id then -- tried to remove obsolete, or non-existent
-		db("HUD "..tostring(id).." no longer relevant.")
+	if os.time() - huddef.settime < hud_duration_time then
+		db(".. too soon !")
 		return
 	end
-	-- here, savedid must be non-nil
 
-	db("Removing "..tostring(savedid) )
+	db("... removing.")
 
-	-- remove it
+	local savedid = player_huds[playername].hid
 	player:hud_remove(savedid)
-	player_huds[playername].hid = nil
+
+	player_huds[playername] = nil
+
 end
 
-local function set_hud(player, message)
-	-- remove pre-existing hud
-	remove_hud(player)
-
-	-- write new hud
+local function create_hud(player, message)
+	local playername = player:get_player_name()
 	local hid = player:hud_add({
 		hud_elem_type = "text",
 		direction = 0,
@@ -167,13 +196,26 @@ local function set_hud(player, message)
 
 	})
 
-	db("Setting hud "..tostring(hid) )
+	player_huds[playername] = { hid = hid, settime = os.time() }
+end
 
-	-- save hud id
-	player_huds[player:get_player_name()] = { hid=hid, time=os.time() }
+local function set_hud(player, message)
+	local playername = player:get_player_name()
+	local huddef = player_huds[playername]
 
-	-- set timeout to remove hud
-	minetest.after(1, function()
+	if not huddef then
+		create_hud(player, message)
+		huddef = player_huds[playername]
+	else
+		db("Adding '"..message.."' to "..tostring(huddef.hid))
+		player:hud_change(huddef.hid, "text", message)
+
+		player_huds[playername].settime = os.time()
+	end
+
+	local hid = huddef.hid
+
+	minetest.after(hud_duration_time + 0.5, function()
 		remove_hud(player, hid)
 	end)
 end
@@ -184,13 +226,15 @@ local function rot_message(player, axis, rotation)
 	set_hud(player, axisnotes[axis+1]..", Y-rotation is "..tostring(rotation))
 end
 
+-- Main handlers
+
 local function add_wear(itemstack)
 	local maxu = screw_materials[itemstack:get_name()].wear_rate
 
 	itemstack:add_wear(math.ceil(65536 / maxu))
-end
 
--- Main handlers
+	return itemstack
+end
 
 local function sd_swivel(itemstack, user, pointed_thing)
 
@@ -256,7 +300,7 @@ end
 -- Tools
 
 local function capitalize(mystr)
-	return mystr -- TODO make firsst letter upper case
+	return mystr:gsub("^%l", string.upper)
 end
 
 local function register_screwtools(material, material_name, color)
@@ -278,7 +322,7 @@ local function register_screwtools(material, material_name, color)
 
 	minetest.register_tool("screwdriver:spiritlevel_"..material_name, {
 		description = capitalize(material_name).." Spirit Level (left-click: reset, right-click: print orientation)",
-		inventory_image = "screwdriver_plus_spiritlevel_"..material_name..".png",
+		inventory_image = "screwdriver_plus_spiritlevel.png^[colorize:"..color.."^screwdriver_plus_level.png",
 
 		on_use = function(itemstack, user, pointed_thing)
 			itemstack = sd_reset(itemstack, user, pointed_thing)
@@ -309,8 +353,12 @@ local function register_screwtools(material, material_name, color)
 
 end
 
-for _,matdef in pairs(screw_materials) do
-	register_screwtools(matdef.material, matdef.material_name, matdef.color)
+if minetest.setting_getbool("screwdriver.steel_only") then
+	register_screwtools("default:steel_ingot", "steel", "white:20")
+else
+	for _,matdef in pairs(screw_materials) do
+		register_screwtools(matdef.material, matdef.material_name, matdef.color)
+	end
 end
 
 minetest.register_alias("screwdriver:screwdriver_steel", "screwdriver:screwdriver")
