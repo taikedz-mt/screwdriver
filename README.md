@@ -14,7 +14,7 @@ To use the screwdriver, left-click to set the axis direction, then swivel the no
 
 This screwdriver flips the axis in an intuitive order, progressing through X pointing up, X pointing down, Y up, Y down, Z up and Z down.
 
-The ScrewDrvier displays orientation information on-screen upon rotating.flipping an object.
+The ScrewDriver displays orientation information on-screen upon rotating/flipping an object.
 
 ## Spirit Level
 
