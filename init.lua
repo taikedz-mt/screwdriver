@@ -223,7 +223,7 @@ end
 local function rot_message(player, axis, rotation)
 	local playername = player:get_player_name()
 
-	set_hud(player, axisnotes[axis+1]..", Y-rotation is "..tostring(rotation))
+	set_hud(player, axisnotes[axis+1]..", y-rotation is "..tostring(rotation))
 end
 
 -- Main handlers
